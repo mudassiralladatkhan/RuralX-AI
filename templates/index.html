@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RuralX AI | Multimodal Chest X-Ray Diagnostics</title>
+    <meta name="description" content="Offline-capable Multimodal AI for early detection and triage of TB, Pneumonia, and chest diseases in rural healthcare.">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="app-container">
+
+        <!-- ─── Header ─── -->
+        <header class="top-nav">
+            <div class="logo">
+                <div class="logo-icon">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+                        <path d="M21 12C21 16.9706 16.9706 21 12 21C7.02944 21 3 16.9706 3 12C3 7.02944 7.02944 3 12 3C16.9706 3 21 7.02944 21 12Z" stroke="#fff" stroke-width="2"/>
+                        <path d="M12 8V16M8 12H16" stroke="#fff" stroke-width="2" stroke-linecap="round"/>
+                    </svg>
+                </div>
+                <div>
+                    <span class="logo-name">RuralX <span class="logo-ai">AI</span></span>
+                    <span class="logo-tagline">Enhanced Diagnostic System v2</span>
+                </div>
+            </div>
+
+            <div class="nav-controls">
+                <span class="status-dot online"></span>
+                <span class="status-label">System Ready · Offline Mode</span>
+            </div>
+        </header>
+
+        <nav class="nav-tabs" style="display: flex; gap: 1rem; margin-top: 1rem; padding: 0 2rem; border-bottom: 1px solid rgba(255,255,255,0.1);">
+            <button class="nav-tab active" data-target="diagnosisView" style="background: none; border: none; color: #fff; padding: 0.5rem 1rem; font-size: 1rem; cursor: pointer; border-bottom: 2px solid transparent; opacity: 0.7;">Diagnosis</button>
+            <button class="nav-tab" data-target="historyView" style="background: none; border: none; color: #fff; padding: 0.5rem 1rem; font-size: 1rem; cursor: pointer; border-bottom: 2px solid transparent; opacity: 0.7;">Scan History</button>
+            <button class="nav-tab" data-target="aboutView" style="background: none; border: none; color: #fff; padding: 0.5rem 1rem; font-size: 1rem; cursor: pointer; border-bottom: 2px solid transparent; opacity: 0.7;">About System</button>
+        </nav>
+
+        <!-- ─── DIAGNOSIS TAB ─── -->
+        <main id="diagnosisView" class="main-grid tab-view active">
+
+            <!-- Left: Input Panel -->
+            <section class="glass-panel upload-panel">
+                <div class="section-header">
+                    <div class="section-badge">Feature 1–8</div>
+                    <h2>Diagnostic Input</h2>
+                    <p>Upload a chest X-ray and provide clinical context</p>
+                </div>
+
+                <form id="diagnosisForm" autocomplete="off">
+
+                    <!-- Drop Zone -->
+                    <div class="drop-zone" id="dropZone">
+                        <input type="file" id="xrayImage" name="image" accept="image/*" required>
+                        <div class="drop-placeholder" id="dropPlaceholder">
+                            <div class="drop-icon">
+                                <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                                    <path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" stroke-linejoin="round" stroke-linecap="round"/>
+                                </svg>
+                            </div>
+                            <span class="drop-title">Drop X-Ray Image Here</span>
+                            <span class="drop-sub">or click to browse · JPG / PNG supported</span>
+                        </div>
+                        <img id="imagePreview" class="hidden" alt="X-Ray Preview">
+                        <div class="drop-overlay hidden" id="dropOverlay">
+                            <span>Change Image</span>
+                        </div>
+                    </div>
+
+                    <!-- Patient Data -->
+                    <div class="field-grid">
+                        <div class="field-group">
+                            <label for="patientName">Patient Name</label>
+                            <input type="text" id="patientName" name="patient_name" placeholder="e.g. John Doe">
+                        </div>
+                        <div class="field-group">
+                            <label for="age">Patient Age</label>
+                            <input type="number" id="age" name="age" placeholder="e.g. 45" min="0" max="120">
+                        </div>
+                    </div>
+
+                    <!-- NEW: Clinical Vitals & History -->
+                    <div class="field-grid">
+                        <div class="field-group">
+                            <label for="spo2">SpO2 Level (%) <span class="required" style="color:red">*</span></label>
+                            <input type="number" id="spo2" name="spo2" placeholder="e.g. 96" min="30" max="100" required>
+                        </div>
+                        <div class="field-group">
+                            <label for="temperature">Body Temp (°F)</label>
+                            <input type="number" id="temperature" name="temperature" placeholder="e.g. 98.6" step="0.1">
+                        </div>
+                    </div>
+
+                    <div class="field-grid">
+                        <div class="field-group">
+                            <label for="fever_days">Fever Duration (Days)</label>
+                            <input type="number" id="fever_days" name="fever_days" placeholder="0" min="0">
+                        </div>
+                        <div class="field-group">
+                            <label for="cough_days">Cough Duration (Days)</label>
+                            <input type="number" id="cough_days" name="cough_days" placeholder="0" min="0">
+                        </div>
+                    </div>
+
+                    <div class="radio-group-container" style="display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 1rem;">
+                        <label class="radio-label" style="font-size: 0.875rem; color: #64748B; font-weight: 500;">Haemoptysis (Coughing Blood)</label>
+                        <div class="radio-options" style="display: flex; gap: 1rem;">
+                            <label style="display: flex; align-items: center; gap: 0.25rem;"><input type="radio" name="haemoptysis" value="yes"> Yes</label>
+                            <label style="display: flex; align-items: center; gap: 0.25rem;"><input type="radio" name="haemoptysis" value="no" checked> No</label>
+                        </div>
+                    </div>
+
+                    <div class="radio-group-container" style="display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 1.5rem;">
+                        <label class="radio-label" style="font-size: 0.875rem; color: #64748B; font-weight: 500;">BCG Vaccination Status</label>
+                        <div class="radio-options" style="display: flex; gap: 1rem;">
+                            <label style="display: flex; align-items: center; gap: 0.25rem;"><input type="radio" name="bcg" value="yes"> Yes</label>
+                            <label style="display: flex; align-items: center; gap: 0.25rem;"><input type="radio" name="bcg" value="no"> No</label>
+                            <label style="display: flex; align-items: center; gap: 0.25rem;"><input type="radio" name="bcg" value="unknown" checked> Unknown</label>
+                        </div>
+                    </div>
+
+                    <div class="field-group full">
+                        <label for="symptoms">Observed Symptoms</label>
+                        <input type="text" id="symptoms" name="symptoms" placeholder="Additional symptoms...">
+                    </div>
+
+                    <!-- NEW: Multi-language Grid -->
+                    <div class="field-group full">
+                        <label>Diagnostic Report Language</label>
+                        <div class="language-grid" id="languageGrid" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.5rem;">
+                            <label class="lang-card" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem; border: 1px solid #E2E8F0; border-radius: 6px; cursor: pointer;"><input type="radio" name="language" value="en" checked><span>🇬🇧 English</span></label>
+                            <label class="lang-card" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem; border: 1px solid #E2E8F0; border-radius: 6px; cursor: pointer;"><input type="radio" name="language" value="hi"><span>🇮🇳 Hindi</span></label>
+                            <label class="lang-card" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem; border: 1px solid #E2E8F0; border-radius: 6px; cursor: pointer;"><input type="radio" name="language" value="kn"><span>🇮🇳 Kannada</span></label>
+                            <label class="lang-card" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem; border: 1px solid #E2E8F0; border-radius: 6px; cursor: pointer;"><input type="radio" name="language" value="mr"><span>🇮🇳 Marathi</span></label>
+                            <label class="lang-card" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem; border: 1px solid #E2E8F0; border-radius: 6px; cursor: pointer;"><input type="radio" name="language" value="ta"><span>🇮🇳 Tamil</span></label>
+                            <label class="lang-card" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem; border: 1px solid #E2E8F0; border-radius: 6px; cursor: pointer;"><input type="radio" name="language" value="te"><span>🇮🇳 Telugu</span></label>
+                            <label class="lang-card" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem; border: 1px solid #E2E8F0; border-radius: 6px; cursor: pointer;"><input type="radio" name="language" value="bn"><span>🇮🇳 Bengali</span></label>
+                            <label class="lang-card" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem; border: 1px solid #E2E8F0; border-radius: 6px; cursor: pointer;"><input type="radio" name="language" value="or"><span>🇮🇳 Odia</span></label>
+                        </div>
+                    </div>
+
+                    <!-- NEW: Pre-Analysis Risk Strip -->
+                    <div id="preRiskStrip" class="pre-risk-strip hidden" style="background-color: #FEF2F2; border-left: 4px solid #EF4444; padding: 1rem; border-radius: 0.5rem; margin-top: 1rem; display: none;">
+                        <div style="display: flex; gap: 0.75rem; align-items: center;">
+                            <div class="strip-icon" style="font-size: 1.25rem;">⚠️</div>
+                            <div class="strip-text" style="color: #991B1B; font-size: 0.875rem;">
+                                <strong>High Risk Indicators Detected:</strong>
+                                <span id="preRiskText"></span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <button type="submit" class="primary-btn" id="analyzeBtn">
+                        <svg class="btn-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35M11 8v6M8 11h6"/></svg>
+                        <span id="btnText">Analyze Scan</span>
+                        <div class="loader hidden" id="btnLoader"></div>
+                    </button>
+
+                    <!-- NEW: Processing Steps -->
+                    <div id="processingSteps" class="processing-steps hidden" style="margin-top: 1rem; background: #F8FAFC; padding: 1rem; border-radius: 0.5rem; border: 1px solid #E2E8F0; display: none;">
+                        <h4 style="font-size: 0.875rem; margin-bottom: 0.5rem; color: #334155;">Processing Inference...</h4>
+                        <div class="step-item" id="step1" style="font-size: 0.8rem; color: #64748B; display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.25rem;">
+                            <span class="step-icon">⏳</span> Loading Tri-Ensemble weights
+                        </div>
+                        <div class="step-item" id="step2" style="font-size: 0.8rem; color: #64748B; display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.25rem;">
+                            <span class="step-icon">⏳</span> Checking image quality (Laplacian)
+                        </div>
+                        <div class="step-item" id="step3" style="font-size: 0.8rem; color: #64748B; display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.25rem;">
+                            <span class="step-icon">⏳</span> Computing MC Dropout (10 passes)
+                        </div>
+                        <div class="step-item" id="step4" style="font-size: 0.8rem; color: #64748B; display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.25rem;">
+                            <span class="step-icon">⏳</span> Generating Grad-CAM heatmap
+                        </div>
+                    </div>
+
+                </form>
+            </section>
+
+            <!-- Right: Results Panel -->
+            <section class="glass-panel results-panel">
+                <div class="section-header">
+                    <div class="section-badge">AI Output</div>
+                    <h2>Diagnostic Results</h2>
+                    <p>AI analysis, heatmap, and clinical report</p>
+                </div>
+
+                <!-- Empty state -->
+                <div id="resultsPlaceholder" class="empty-state">
+                    <div class="empty-icon">
+                        <svg width="52" height="52" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1">
+                            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" stroke-linejoin="round"/>
+                        </svg>
+                    </div>
+                    <p>Awaiting X-ray upload…</p>
+                    <span>Results will appear here after analysis</span>
+                </div>
+
+                <!-- Results Content -->
+                <div id="resultsContent" class="hidden fade-in">
+
+                    <!-- Triage Banner -->
+                    <div class="triage-banner" id="triageBanner">
+                        <div class="triage-icon" id="triageIcon">!</div>
+                        <div class="triage-body">
+                            <div class="triage-level" id="triageLevel">—</div>
+                            <div class="triage-referral" id="triageReferral"></div>
+                        </div>
+                        <div class="triage-qa" id="qaMessage"></div>
+                    </div>
+
+                    <!-- Confidence + Uncertainty -->
+                    <div class="metrics-row" id="confidenceRow">
+                        <div class="metric-pill">
+                            <span class="mp-label">Confidence</span>
+                            <span class="mp-value" id="confidenceVal">—</span>
+                        </div>
+                        <div class="metric-pill uncertainty">
+                            <span class="mp-label">Uncertainty (MC Dropout)</span>
+                            <span class="mp-value" id="uncertaintyVal">—</span>
+                        </div>
+                    </div>
+
+                    <!-- Grad-CAM + Probability Bars -->
+                    <div class="visuals-grid">
+                        <div class="visual-card">
+                            <div class="card-header">
+                                <h4>Grad-CAM Explainability</h4>
+                                <span class="card-badge">XAI</span>
+                            </div>
+                            <!-- NEW: Heatmap Tabs -->
+                            <div class="heatmap-tabs" style="display: flex; gap: 0.5rem; margin-bottom: 0.5rem;">
+                                <button type="button" class="hm-tab active" data-view="heatmap" style="flex: 1; padding: 0.25rem; font-size: 0.75rem; border: 1px solid #E2E8F0; border-radius: 4px; background: #EEF2FF; color: #4F46E5; cursor: pointer;">Heatmap</button>
+                                <button type="button" class="hm-tab" data-view="original" style="flex: 1; padding: 0.25rem; font-size: 0.75rem; border: 1px solid #E2E8F0; border-radius: 4px; background: white; color: #64748B; cursor: pointer;">Original</button>
+                            </div>
+                            <div class="img-wrapper" style="position: relative;">
+                                <img id="originalImage" alt="Original X-Ray" style="position: absolute; top:0; left:0; width:100%; height:100%; object-fit:contain; opacity: 0; z-index: 1;">
+                                <img id="heatmapImage" alt="Grad-CAM Heatmap" style="position: relative; z-index: 2;">
+                            </div>
+                            <!-- NEW: Opacity Slider -->
+                            <div class="opacity-control" style="margin-top: 0.5rem;">
+                                <label style="font-size: 0.75rem; color: #64748b;">Heatmap Opacity</label>
+                                <input type="range" id="heatmapOpacity" min="0" max="1" step="0.05" value="1" style="width: 100%;">
+                            </div>
+                        </div>
+
+                        <div class="stats-card">
+                            <div class="card-header">
+                                <h4>Disease Probability</h4>
+                                <span class="card-badge">Feature 1–2</span>
+                            </div>
+
+                            <div class="stat-bar">
+                                <div class="stat-info">
+                                    <span>Tuberculosis</span>
+                                    <span id="probTB" class="prob-value">0%</span>
+                                </div>
+                                <div class="progress-track">
+                                    <div class="progress-fill danger" id="fillTB"></div>
+                                </div>
+                            </div>
+
+                            <div class="stat-bar">
+                                <div class="stat-info">
+                                    <span>Pneumonia</span>
+                                    <span id="probPneumonia" class="prob-value">0%</span>
+                                </div>
+                                <div class="progress-track">
+                                    <div class="progress-fill warning" id="fillPneumonia"></div>
+                                </div>
+                            </div>
+
+                            <!-- Radiological Findings -->
+                            <div class="card-header" style="margin-top:1.25rem; margin-bottom:0.75rem;">
+                                <h4>Radiological Findings</h4>
+                                <span class="card-badge">Feature 2</span>
+                            </div>
+                            <div id="findingsList" class="findings-list">
+                                <!-- Injected by JS -->
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Multilingual Report -->
+                    <div class="report-box">
+                        <div class="report-header">
+                            <h3 id="reportTitle">Diagnostic Report</h3>
+                            <span class="card-badge">Feature 8</span>
+                        </div>
+                        <div class="report-list" id="reportList"></div>
+                        <div class="report-actions">
+                            <button class="secondary-btn" onclick="window.print()">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M6 9V2h12v7M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2M6 14h12v8H6v-8z" stroke-linejoin="round"/>
+                                </svg>
+                                Print
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- JSON Viewer Container -->
+                    <div id="jsonViewerContainer" class="json-viewer hidden" style="margin-top: 1rem; background: #1E293B; border-radius: 0.5rem; padding: 1rem; color: #E2E8F0; font-family: monospace; font-size: 0.8rem; overflow-x: auto; display: none;">
+                        <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem; border-bottom: 1px solid #334155; padding-bottom: 0.5rem;">
+                            <strong style="color: #38BDF8;">Structured Output (JSON)</strong>
+                            <button type="button" onclick="navigator.clipboard.writeText(document.getElementById('jsonContent').innerText)" style="background: none; border: none; color: #94A3B8; cursor: pointer; font-size: 0.75rem;">Copy</button>
+                        </div>
+                        <pre id="jsonContent" style="margin: 0; white-space: pre-wrap; word-break: break-all;"></pre>
+                    </div>
+
+                </div><!-- end resultsContent -->
+            </section>
+        </main>
+
+        <!-- ─── HISTORY TAB ─── -->
+        <main id="historyView" class="main-grid tab-view" style="display: none;">
+            <section class="glass-panel" style="grid-column: span 12;">
+                <div class="section-header">
+                    <h2>Scan History</h2>
+                    <p>Recent offline inference logs</p>
+                </div>
+                <div class="history-list" id="historyList" style="display: flex; flex-direction: column; gap: 1rem;">
+                    <!-- Injected by JS -->
+                </div>
+            </section>
+        </main>
+
+        <!-- ─── ABOUT TAB ─── -->
+        <main id="aboutView" class="main-grid tab-view" style="display: none;">
+            <section class="glass-panel" style="grid-column: span 12;">
+                <div class="section-header">
+                    <h2>About RuralX AI</h2>
+                    <p>System Specifications & Medical Capabilities</p>
+                </div>
+                <div style="color: #334155; line-height: 1.6;">
+                    <h3>Architecture</h3>
+                    <p>RuralX AI utilizes a <strong>Triple DenseNet-121 Ensemble</strong> optimized for local CPU execution. It employs MC Dropout for uncertainty estimation and Laplacian variance for image quality gating.</p>
+                    <h3 style="margin-top: 1rem;">Clinical Target</h3>
+                    <p>Detects Tuberculosis and Pneumonia. Incorporates SpO2 levels and clinical history to adjust triage risk accurately without compromising core model weights.</p>
+                </div>
+            </section>
+        </main>
+
+    </div><!-- end app-container -->
+
+    <script src="/static/main.js"></script>
+</body>
+</html>
