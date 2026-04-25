@@ -1,426 +1,270 @@
 /* ════════════════════════════════════════════════════════════
-   RuralX AI – Enhanced Frontend Logic v2
-   Implements Features: 1-9 result rendering, tab navigation,
-   metrics dashboard, structured JSON viewer.
+   RuralX AI – App Page Logic (form → scanning redirect)
    ════════════════════════════════════════════════════════════ */
 
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
+    const auth = window.RuralXAuth;
 
-    // ── State ──
+    // ── Auth Guard ──
+    const session = await auth.requireAuth('/auth');
+    if (!session) return;
+
+    const user    = session.user;
+    const profile = await auth.getProfile(user.id);
+
+    // ── Populate header ──
+    const name = profile?.full_name || user.email?.split('@')[0] || 'User';
+    const bar  = document.getElementById('userProfileBar');
+    if (bar) {
+        document.getElementById('userAvatar').textContent = name.charAt(0).toUpperCase();
+        document.getElementById('userName').textContent   = name;
+        document.getElementById('userPid').textContent    = profile?.patient_id || '—';
+        bar.style.display = 'flex';
+    }
+
+    // ── Auto-fill patient name ──
+    const nameInput = document.getElementById('patientName');
+    if (nameInput && profile?.full_name && !nameInput.value) {
+        nameInput.value = profile.full_name;
+    }
+
+    // ── DOB → Age auto-calculate ──
+    const dobInput = document.getElementById('patientDob');
+    const ageInput = document.getElementById('age');
+    if (dobInput) {
+        const calcAge = (dob) => {
+            const age = auth.calculateAge(dob);
+            if (age !== null && ageInput) ageInput.value = age;
+        };
+        dobInput.addEventListener('change', () => calcAge(dobInput.value));
+        if (profile?.date_of_birth) { dobInput.value = profile.date_of_birth; calcAge(profile.date_of_birth); }
+    }
 
     // ── Drop Zone ──
-    const dropZone    = document.getElementById('dropZone');
-    const xrayImage   = document.getElementById('xrayImage');
-    const imgPreview  = document.getElementById('imagePreview');
-    const dropOverlay = document.getElementById('dropOverlay');
-    const dropPH      = document.getElementById('dropPlaceholder');
+    const dropZone   = document.getElementById('dropZone');
+    const xrayInput  = document.getElementById('xrayImage');
+    const imgPreview = document.getElementById('imagePreview');
+    const dropPH     = document.getElementById('dropPlaceholder');
+    const dropOvly   = document.getElementById('dropOverlay');
 
-    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(evt =>
-        dropZone.addEventListener(evt, e => { e.preventDefault(); e.stopPropagation(); })
-    );
+    let currentXrayBase64 = null;
+    let currentXrayMeta   = { name: 'xray.jpg', type: 'image/jpeg' };
 
-    ['dragenter', 'dragover'].forEach(evt =>
-        dropZone.addEventListener(evt, () => dropZone.classList.add('dragover'))
-    );
-
-    ['dragleave', 'drop'].forEach(evt =>
-        dropZone.addEventListener(evt, () => dropZone.classList.remove('dragover'))
-    );
-
-    dropZone.addEventListener('drop', e => {
-        xrayImage.files = e.dataTransfer.files;
-        handleFile(e.dataTransfer.files[0]);
-    });
-
-    xrayImage.addEventListener('change', function () {
-        if (this.files && this.files[0]) handleFile(this.files[0]);
-    });
+    ['dragenter','dragover','dragleave','drop'].forEach(e => dropZone.addEventListener(e, ev => { ev.preventDefault(); ev.stopPropagation(); }));
+    ['dragenter','dragover'].forEach(e => dropZone.addEventListener(e, () => dropZone.classList.add('dragover')));
+    ['dragleave','drop'].forEach(e => dropZone.addEventListener(e, () => dropZone.classList.remove('dragover')));
+    dropZone.addEventListener('drop', e => { xrayInput.files = e.dataTransfer.files; handleFile(e.dataTransfer.files[0]); });
+    xrayInput.addEventListener('change', function() { if (this.files?.[0]) handleFile(this.files[0]); });
 
     function handleFile(file) {
         if (!file.type.match('image.*')) { alert('Please upload an image file.'); return; }
+        currentXrayMeta = { name: file.name, type: file.type };
         const reader = new FileReader();
         reader.onload = e => {
+            currentXrayBase64 = e.target.result;
             imgPreview.src = e.target.result;
             imgPreview.classList.remove('hidden');
             dropPH.classList.add('hidden');
-            dropOverlay.classList.remove('hidden');
+            if (dropOvly) dropOvly.classList.remove('hidden');
         };
         reader.readAsDataURL(file);
     }
 
-    // ── Pre-Analysis Risk Evaluator ──
-    const spo2Input = document.getElementById('spo2');
-    const haemoptysisYes = document.querySelector('input[name="haemoptysis"][value="yes"]');
-    const feverDays = document.getElementById('fever_days');
-    const preRiskStrip = document.getElementById('preRiskStrip');
-    const preRiskText = document.getElementById('preRiskText');
-
+    // ── Pre-risk strip ──
+    const spo2El = document.getElementById('spo2');
+    const preRisk = document.getElementById('preRiskStrip');
+    const preText = document.getElementById('preRiskText');
     function checkPreRisk() {
-        let riskMsgs = [];
-        if (spo2Input.value && parseInt(spo2Input.value) < 94) {
-            riskMsgs.push(`Low SpO2 (${spo2Input.value}%)`);
-        }
-        if (haemoptysisYes && haemoptysisYes.checked) {
-            riskMsgs.push("Haemoptysis");
-        }
-        if (feverDays.value && parseInt(feverDays.value) >= 14) {
-            riskMsgs.push("Prolonged Fever");
-        }
-        
-        if (riskMsgs.length > 0) {
-            preRiskText.textContent = riskMsgs.join(", ");
-            preRiskStrip.style.display = 'block';
-        } else {
-            preRiskStrip.style.display = 'none';
-        }
+        const msgs = [];
+        if (spo2El?.value && parseInt(spo2El.value) < 94) msgs.push(`Low SpO2 (${spo2El.value}%)`);
+        if (document.querySelector('input[name="haemoptysis"][value="yes"]')?.checked) msgs.push('Haemoptysis');
+        const fd = document.getElementById('fever_days');
+        if (fd?.value && parseInt(fd.value) >= 14) msgs.push('Prolonged Fever');
+        if (preRisk) preRisk.style.display = msgs.length ? 'block' : 'none';
+        if (preText) preText.textContent = msgs.join(', ');
     }
-
-    [spo2Input, feverDays].forEach(el => el && el.addEventListener('input', checkPreRisk));
+    spo2El?.addEventListener('input', checkPreRisk);
+    document.getElementById('fever_days')?.addEventListener('input', checkPreRisk);
     document.querySelectorAll('input[name="haemoptysis"]').forEach(el => el.addEventListener('change', checkPreRisk));
 
-    // ── Form Submission & Processing Animation ──
+    // ── Form Submit → Redirect to /scanning ──
     const form       = document.getElementById('diagnosisForm');
     const analyzeBtn = document.getElementById('analyzeBtn');
-    const btnText    = document.getElementById('btnText');
-    const btnLoader  = document.getElementById('btnLoader');
-    const processingSteps = document.getElementById('processingSteps');
 
-    const resultsPlaceholder = document.getElementById('resultsPlaceholder');
-    const resultsContent     = document.getElementById('resultsContent');
-
-    async function runProcessingSteps() {
-        processingSteps.style.display = 'block';
-        for (let i = 1; i <= 4; i++) {
-            const step = document.getElementById(`step${i}`);
-            if(step) step.querySelector('.step-icon').textContent = '⏳';
-        }
-
-        const delays = [800, 1500, 2200, 2800];
-        for (let i = 1; i <= 4; i++) {
-            setTimeout(() => {
-                const step = document.getElementById(`step${i}`);
-                if(step) {
-                    step.querySelector('.step-icon').textContent = '✅';
-                    step.style.color = '#10B981';
-                }
-            }, delays[i-1]);
-        }
-    }
-
-    form.addEventListener('submit', async e => {
+    form.addEventListener('submit', e => {
         e.preventDefault();
+        if (!currentXrayBase64) { alert('Please upload an X-ray image first.'); return; }
 
-        // Loading state
-        btnText.classList.add('hidden');
-        btnLoader.classList.remove('hidden');
         analyzeBtn.disabled = true;
-        
-        runProcessingSteps();
+        document.getElementById('btnText').textContent = 'Preparing…';
 
-        try {
-            const response = await fetch('/api/predict', {
-                method: 'POST',
-                body: new FormData(form),
-            });
+        // Collect all form values into a plain object
+        const scanPayload = {
+            xray_base64:  currentXrayBase64,
+            xray_name:    currentXrayMeta.name,
+            xray_type:    currentXrayMeta.type,
+            patient_name: document.getElementById('patientName')?.value || '',
+            age:          document.getElementById('age')?.value || '',
+            patient_dob:  document.getElementById('patientDob')?.value || '',
+            gender:       document.getElementById('patientGender')?.value || '',
+            spo2:         document.getElementById('spo2')?.value || '',
+            temperature:  document.getElementById('temperature')?.value || '',
+            fever_days:   document.getElementById('fever_days')?.value || '',
+            cough_days:   document.getElementById('cough_days')?.value || '',
+            symptoms:     document.getElementById('symptoms')?.value || '',
+            haemoptysis:  document.querySelector('input[name="haemoptysis"]:checked')?.value || 'no',
+            bcg:          document.querySelector('input[name="bcg"]:checked')?.value || 'unknown',
+            language:     document.querySelector('input[name="language"]:checked')?.value || 'en',
+        };
 
-            const data = await response.json();
-
-            if (!response.ok || !data.success) {
-                showError(data.error || 'Unknown error occurred.');
-            } else {
-                renderResults(data);
-                if (data.session_id) loadHistory(); // refresh history if success
-            }
-        } catch (err) {
-            showError('Cannot reach prediction server. Is app.py running?');
-            console.error(err);
-        } finally {
-            btnText.classList.remove('hidden');
-            btnLoader.classList.add('hidden');
-            analyzeBtn.disabled = false;
-            processingSteps.style.display = 'none';
-        }
+        // Store in sessionStorage and redirect
+        sessionStorage.setItem('rxScanData', JSON.stringify(scanPayload));
+        window.location.href = '/scanning';
     });
 
-    // ── Toast Error helper ──
-    function showError(msg) {
-        showToast(`⚠️ Error: ${msg}`, 'error');
-    }
-
-    function showToast(message, type = 'info') {
-        const toast = document.createElement('div');
-        toast.className = `toast toast-${type}`;
-        toast.style.position = 'fixed';
-        toast.style.bottom = '20px';
-        toast.style.right = '20px';
-        toast.style.padding = '1rem 1.5rem';
-        toast.style.background = type === 'error' ? '#EF4444' : '#10B981';
-        toast.style.color = 'white';
-        toast.style.borderRadius = '8px';
-        toast.style.boxShadow = '0 4px 6px rgba(0,0,0,0.1)';
-        toast.style.zIndex = '9999';
-        toast.textContent = message;
-        document.body.appendChild(toast);
-        setTimeout(() => toast.remove(), 4000);
-    }
-
-    // ── Main Results Renderer ──
-    function renderResults(data) {
-        const { results, report, heatmap, qa_message } = data;
-
-        // Switch placeholder → content
-        resultsPlaceholder.classList.add('hidden');
-        resultsContent.classList.remove('hidden');
-        resultsContent.classList.add('fade-in');
-
-        // ── Feature 1 & 4: Triage Banner ──
-        const banner  = document.getElementById('triageBanner');
-        const level   = document.getElementById('triageLevel');
-        const referral = document.getElementById('triageReferral');
-        const qa      = document.getElementById('qaMessage');
-
-        banner.className = `triage-banner risk-${results.risk_level}`;
-        level.textContent = `${results.risk_level} RISK`;
-        document.getElementById('triageIcon').textContent = riskIcon(results.risk_level);
-
-        if (results.referral_hours === 0) {
-            referral.textContent = 'Action: Immediate referral required';
-        } else if (results.referral_hours !== null && results.referral_hours !== undefined) {
-            referral.textContent = `Referral window: within ${results.referral_hours} hours`;
-        } else {
-            referral.textContent = 'No urgent referral required';
-        }
-        qa.textContent = qa_message;
-
-        // ── Feature 3: Confidence + Uncertainty ──
-        document.getElementById('confidenceVal').textContent  = `${results.confidence}%`;
-        document.getElementById('uncertaintyVal').textContent = `±${results.uncertainty_pct}%`;
-
-        // ── Grad-CAM heatmap ──
-        const heatmapImg = document.getElementById('heatmapImage');
-        const originalImg = document.getElementById('originalImage');
-        if (heatmapImg) heatmapImg.src = heatmap;
-        
-        // Ensure originalImg has the preview src
-        if (originalImg) originalImg.src = document.getElementById('imagePreview').src;
-
-        // Populate Structured JSON
-        const jsonViewerContainer = document.getElementById('jsonViewerContainer');
-        const jsonContent = document.getElementById('jsonContent');
-        if (jsonViewerContainer && data.structured) {
-            jsonViewerContainer.style.display = 'block';
-            jsonContent.textContent = JSON.stringify(data.structured, null, 2);
-        }
-
-        // ── Feature 1: TB probability bar ──
-        const tbPct = (parseFloat(results.tb_prob) * 100).toFixed(1);
-        document.getElementById('probTB').textContent  = `${tbPct}%`;
-        document.getElementById('fillTB').style.width  = `${tbPct}%`;
-
-        const pnPct = (parseFloat(results.pneumonia_prob) * 100).toFixed(1);
-        document.getElementById('probPneumonia').textContent = `${pnPct}%`;
-        document.getElementById('fillPneumonia').style.width = `${pnPct}%`;
-
-        // ── Feature 2: Radiological Findings ──
-        renderFindings(results.radiological_findings || {});
-
-        // ── Feature 8: Multilingual Report ──
-        document.getElementById('reportTitle').textContent = report.title;
-        const reportList = document.getElementById('reportList');
-        reportList.innerHTML = '';
-
-        report.data.forEach(item => {
-            const el = document.createElement('div');
-            el.className = 'report-item';
-            const valClass = getValueClass(item.value);
-            el.innerHTML = `
-                <span class="r-label">${escHtml(item.label)}</span>
-                <span class="r-val ${valClass}">${escHtml(item.value)}</span>
-            `;
-            reportList.appendChild(el);
+    // ── Nav Tabs ──
+    document.querySelectorAll('.nav-tab').forEach(tab => {
+        tab.addEventListener('click', () => {
+            document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+            tab.classList.add('active');
+            document.querySelectorAll('.tab-view').forEach(v => v.style.display = 'none');
+            const tv = document.getElementById(tab.dataset.target);
+            if (tv) tv.style.display = 'block'; // Block is better for map container than grid
+            if (tab.dataset.target === 'historyView') loadHistory();
+            if (tab.dataset.target === 'epiDashboardView') loadEpiDashboard();
         });
+    });
 
-        // Add radiological sub-section to report if present
-        if (report.radiological && report.radiological.length > 0) {
-            const hdr = document.createElement('div');
-            hdr.className = 'report-item';
-            hdr.style.marginTop = '0.75rem';
-            hdr.innerHTML = `<span class="r-label">Radiological Findings</span>
-                <span class="r-val">${report.radiological.map(r => `${r.finding} (${(r.probability*100).toFixed(0)}%)`).join(' · ')}</span>`;
-            reportList.appendChild(hdr);
+    // ── Epi Dashboard (Map) ──
+    let mapInitialized = false;
+    let epiMap = null;
+    async function loadEpiDashboard() {
+        if (!mapInitialized) {
+            // Dark map tiles
+            epiMap = L.map('indiaMap').setView([22.5937, 78.9629], 5); // Center of India
+            L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+                attribution: '&copy; <a href="https://carto.com/attributions">CARTO</a>'
+            }).addTo(epiMap);
+            mapInitialized = true;
+        } else {
+            epiMap.invalidateSize(); // Fix gray tiles issue when unhidden
+        }
+
+        // Fetch all recent scans
+        const { data, error } = await window.RuralXAuth.supabase.from('rx_scans')
+            .select('diagnosis, created_at, risk_level')
+            .order('created_at', { ascending: false })
+            .limit(100);
+
+        if (!error && data) {
+            let tb = 0, pneu = 0;
+            
+            // Clear existing layers (except tile layer)
+            epiMap.eachLayer((layer) => {
+                if (layer instanceof L.CircleMarker) epiMap.removeLayer(layer);
+            });
+
+            data.forEach(scan => {
+                const isTB = scan.diagnosis.toLowerCase().includes('tuberculosis');
+                const isPneu = scan.diagnosis.toLowerCase().includes('pneumonia');
+                
+                if (isTB) tb++;
+                if (isPneu) pneu++;
+
+                if (isTB || isPneu) {
+                    // Generate random coords around central/north India for demo hotspot simulation
+                    // Latitude roughly 15.0 to 28.0, Longitude 73.0 to 85.0
+                    const lat = 15.0 + Math.random() * 13.0;
+                    const lng = 73.0 + Math.random() * 12.0;
+
+                    const color = isTB ? '#EF4444' : '#F59E0B'; // Red for TB, Orange for Pneu
+                    
+                    L.circleMarker([lat, lng], {
+                        radius: 8,
+                        fillColor: color,
+                        color: color,
+                        weight: 1,
+                        opacity: 0.8,
+                        fillOpacity: 0.5
+                    }).addTo(epiMap).bindPopup(`<b>Detected:</b> ${scan.diagnosis}<br><b>Risk:</b> ${scan.risk_level}`);
+                }
+            });
+
+            document.getElementById('tbCount').textContent = tb;
+            document.getElementById('pneuCount').textContent = pneu;
         }
     }
 
-    // ── Feature 2: Radiological Findings renderer ──
-    function renderFindings(findingsObj) {
-        const list = document.getElementById('findingsList');
+    // ── History ──
+    async function loadHistory() {
+        const scans = await auth.getPatientScans(50);
+        const list  = document.getElementById('historyList');
         list.innerHTML = '';
-
-        const entries = Object.entries(findingsObj);
-        if (entries.length === 0) {
-            list.innerHTML = '<span style="font-size:0.78rem;color:var(--muted)">No significant radiological findings</span>';
+        if (!scans?.length) {
+            list.innerHTML = `
+                <div class="empty-state" style="padding: 4rem; text-align: center; border: 1px dashed rgba(255,255,255,0.1); border-radius: 16px;">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="color: rgba(255,255,255,0.2); margin-bottom: 1rem;"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                    <p style="font-weight: 600; color: #94A3B8; margin-bottom: 0.25rem;">No Scans Found</p>
+                    <span style="font-size: 0.85rem; color: #64748B;">Upload your first X-ray to start tracking your health.</span>
+                </div>`; 
             return;
         }
 
-        entries.sort((a, b) => b[1] - a[1]).forEach(([name, prob]) => {
-            const pct = (prob * 100).toFixed(0);
-            const el  = document.createElement('div');
-            el.className = 'finding-item';
-            el.innerHTML = `
-                <span class="finding-name">${escHtml(name)}</span>
-                <div class="finding-bar-track">
-                    <div class="finding-bar-fill" style="width:0%" data-pct="${pct}"></div>
-                </div>
-                <span class="finding-prob">${pct}%</span>
-            `;
+        const ICONS = {
+            IMPROVED: `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>`,
+            WORSENED: `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 18 13.5 8.5 8.5 13.5 1 6"/><polyline points="17 18 23 18 23 12"/></svg>`,
+            STABLE:   `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>`,
+            BASELINE: `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>`
+        };
+
+        scans.forEach(scan => {
+            const el = document.createElement('div');
+            const d = scan.health_delta;
+            
+            if (!d) {
+                el.className = 'delta-card baseline';
+                el.innerHTML = `
+                    <div class="delta-head">${ICONS.BASELINE}<div><strong>${esc(scan.patient_name||'Patient')} \u2014 Initial Baseline Scan</strong><span class="delta-sub">${new Date(scan.created_at).toLocaleString()}</span></div></div>
+                    <div class="delta-metrics" style="grid-template-columns: 1fr 1fr 1fr;">
+                        <div class="dm-item"><span class="dm-label">Diagnosis</span><span class="dm-val" style="font-size:0.9rem;">${esc(scan.diagnosis||'—')}</span></div>
+                        <div class="dm-item"><span class="dm-label">Risk Level</span><span class="dm-val" style="font-size:0.9rem;color:${riskColor(scan.risk_level)}">${scan.risk_level||'—'}</span></div>
+                        <div class="dm-item"><span class="dm-label">Confidence</span><span class="dm-val" style="font-size:0.9rem;">${scan.confidence||'—'}%</span></div>
+                    </div>`;
+            } else {
+                const cls = d.overall_trend === 'IMPROVED' ? 'improved' : d.overall_trend === 'WORSENED' ? 'worsened' : 'stable';
+                const label = d.overall_trend === 'IMPROVED' ? 'Health Improved' : d.overall_trend === 'WORSENED' ? 'Health Declined' : 'Condition Stable';
+                const icon = ICONS[d.overall_trend] || ICONS.STABLE;
+                const arrow = (v) => v < 0 ? '\u2193' : v > 0 ? '\u2191' : '\u2192';
+                const color = (v) => v < 0 ? '#10B981' : v > 0 ? '#EF4444' : '#94A3B8';
+
+                el.className = `delta-card ${cls}`;
+                el.innerHTML = `
+                    <div class="delta-head">${icon}<div><strong>${esc(scan.patient_name||'Patient')} \u2014 ${label}</strong><span class="delta-sub">${new Date(scan.created_at).toLocaleString()} \u2022 ${d.days_since_last ? d.days_since_last + ' days since previous' : 'Compared to previous'}</span></div></div>
+                    <div class="delta-metrics">
+                        <div class="dm-item">
+                            <span class="dm-label">TB Prob.</span>
+                            <span class="dm-val" style="color:${color(d.tb_change)}">${arrow(d.tb_change)} ${Math.abs(d.tb_change).toFixed(1)}%</span>
+                        </div>
+                        <div class="dm-item">
+                            <span class="dm-label">Pneumonia</span>
+                            <span class="dm-val" style="color:${color(d.pneumonia_change)}">${arrow(d.pneumonia_change)} ${Math.abs(d.pneumonia_change).toFixed(1)}%</span>
+                        </div>
+                        <div class="dm-item">
+                            <span class="dm-label">Risk Level</span>
+                            <span class="dm-val" style="font-size:0.85rem;color:${color(d.risk_change)}">${d.curr_risk || '\u2014'}</span>
+                        </div>
+                        <div class="dm-item">
+                            <span class="dm-label">Diagnosis</span>
+                            <span class="dm-val" style="font-size:0.85rem;">${esc(d.curr_diagnosis || '\u2014')}</span>
+                        </div>
+                    </div>`;
+            }
             list.appendChild(el);
         });
-
-        // Animate bars after render
-        requestAnimationFrame(() => {
-            list.querySelectorAll('.finding-bar-fill').forEach(bar => {
-                bar.style.width = bar.dataset.pct + '%';
-            });
-        });
     }
 
-    function copyText(text) {
-        navigator.clipboard.writeText(text).then(() => {
-            alert('Copied to clipboard!');
-        }).catch(() => {
-            // Fallback
-            const ta = document.createElement('textarea');
-            ta.value = text;
-            document.body.appendChild(ta);
-            ta.select();
-            document.execCommand('copy');
-            document.body.removeChild(ta);
-        });
-    }
+    function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+    function riskColor(l) { return {CRITICAL:'#EF4444',HIGH:'#F97316',MEDIUM:'#F59E0B',LOW:'#10B981',ROUTINE:'#06B6D4'}[l]||'#94A3B8'; }
 
-    // ── Helpers ──
-    function riskIcon(level) {
-        const icons = { CRITICAL: '🚨', HIGH: '⚠', MEDIUM: '!', LOW: '✓', ROUTINE: '✓' };
-        return icons[level] || '!';
-    }
-
-    function getValueClass(value) {
-        const v = value.toUpperCase();
-        if (v.includes('CRITICAL') || v.includes('HIGH')) return 'danger';
-        if (v.includes('MEDIUM'))  return 'warning';
-        if (v.includes('LOW') || v.includes('ROUTINE') || v.includes('NORMAL')) return 'success';
-        return '';
-    }
-
-    function escHtml(str) {
-        return String(str)
-            .replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;')
-            .replace(/"/g, '&quot;');
-    }
-
-    // ── Heatmap Toggle & Opacity ──
-    const hmTabs = document.querySelectorAll('.hm-tab');
-    const heatmapOpacity = document.getElementById('heatmapOpacity');
-    const heatmapImage = document.getElementById('heatmapImage');
-    const originalImage = document.getElementById('originalImage');
-
-    hmTabs.forEach(tab => {
-        tab.addEventListener('click', () => {
-            hmTabs.forEach(t => {
-                t.classList.remove('active');
-                t.style.background = 'white';
-                t.style.color = '#64748B';
-            });
-            tab.classList.add('active');
-            tab.style.background = '#EEF2FF';
-            tab.style.color = '#4F46E5';
-
-            if (tab.dataset.view === 'heatmap') {
-                heatmapImage.style.opacity = heatmapOpacity.value;
-                originalImage.style.opacity = '0';
-            } else {
-                heatmapImage.style.opacity = '0';
-                originalImage.style.opacity = '1';
-            }
-        });
-    });
-
-    if (heatmapOpacity) {
-        heatmapOpacity.addEventListener('input', (e) => {
-            const activeTab = document.querySelector('.hm-tab.active');
-            if (activeTab && activeTab.dataset.view === 'heatmap') {
-                heatmapImage.style.opacity = e.target.value;
-            }
-        });
-    }
-
-    // ── Navigation Tabs Logic ──
-    const navTabs = document.querySelectorAll('.nav-tab');
-    const tabViews = document.querySelectorAll('.tab-view');
-
-    navTabs.forEach(tab => {
-        tab.addEventListener('click', () => {
-            navTabs.forEach(t => {
-                t.classList.remove('active');
-                t.style.borderBottomColor = 'transparent';
-                t.style.opacity = '0.7';
-            });
-            tab.classList.add('active');
-            tab.style.borderBottomColor = '#38BDF8';
-            tab.style.opacity = '1';
-
-            tabViews.forEach(v => v.style.display = 'none');
-            const targetView = document.getElementById(tab.dataset.target);
-            if (targetView) targetView.style.display = 'grid'; // main-grid
-        });
-    });
-
-    // Set initial active tab styles
-    const activeNavTab = document.querySelector('.nav-tab.active');
-    if(activeNavTab) {
-        activeNavTab.style.borderBottomColor = '#38BDF8';
-        activeNavTab.style.opacity = '1';
-    }
-
-    // ── History Fetching Logic ──
-    async function loadHistory() {
-        try {
-            const res = await fetch('/api/history');
-            const data = await res.json();
-            if (data.success) {
-                const list = document.getElementById('historyList');
-                list.innerHTML = '';
-                data.sessions.forEach(sess => {
-                    const el = document.createElement('div');
-                    el.style.background = '#F8FAFC';
-                    el.style.padding = '1rem';
-                    el.style.borderRadius = '0.5rem';
-                    el.style.border = '1px solid #E2E8F0';
-                    el.innerHTML = `
-                        <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
-                            <strong>${escHtml(sess.patient_name || 'Unknown')} (Age: ${sess.patient_age || 'N/A'})</strong>
-                            <span style="color: #64748B; font-size: 0.8rem;">${new Date(sess.timestamp).toLocaleString()}</span>
-                        </div>
-                        <div style="display: flex; gap: 1rem; font-size: 0.875rem;">
-                            <span><span style="color: #64748B;">Diagnosis:</span> ${escHtml(sess.diagnosis)} (${sess.confidence}%)</span>
-                            <span><span style="color: #64748B;">Risk:</span> <strong style="color: ${getRiskColorHex(sess.risk_level)};">${sess.risk_level}</strong></span>
-                        </div>
-                    `;
-                    list.appendChild(el);
-                });
-            }
-        } catch (e) {
-            console.error('Failed to load history', e);
-        }
-    }
-
-    function getRiskColorHex(level) {
-        const colors = { CRITICAL: '#EF4444', HIGH: '#F97316', MEDIUM: '#F59E0B', LOW: '#10B981', ROUTINE: '#06B6D4' };
-        return colors[level] || '#94A3B8';
-    }
-
-    // Initial history load
     loadHistory();
 });

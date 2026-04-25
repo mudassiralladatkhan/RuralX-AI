@@ -7,8 +7,12 @@ from PIL import Image
 import datetime
 import uuid
 import shelve
+from dotenv import load_dotenv
+
+load_dotenv()
 
 HISTORY_DB = 'scan_history.db'
+
 from src.ruralx_pipeline import (
     RuralXModelSystem,
     ImageEnhancementPipeline,
@@ -18,19 +22,62 @@ from src.ruralx_pipeline import (
 
 app = Flask(__name__, static_folder='static', template_folder='templates')
 
-# ── Global system initialisation ──
+# ── Supabase (server-side, optional – for future server auth verification) ──
+try:
+    from supabase import create_client, Client
+    _supabase_url = os.environ.get("SUPABASE_URL", "")
+    _supabase_key = os.environ.get("SUPABASE_KEY", "")
+    supabase_client: Client = create_client(_supabase_url, _supabase_key) if _supabase_url else None
+    if supabase_client:
+        print("[OK] Supabase client initialized.")
+except Exception as e:
+    supabase_client = None
+    print(f"[WARN] Supabase client not available: {e}")
+
+# ── Global ML system initialisation ──
 print("Initializing RuralX AI System (v2 – Enhanced)...")
 system = RuralXModelSystem()
 print("System Initialized.")
 
 
 # ──────────────────────────────────────────────────────────────
-# Frontend
+# Frontend Routes
 # ──────────────────────────────────────────────────────────────
 
+@app.route('/sw.js')
+def service_worker():
+    """Serve Service Worker from root for full scope"""
+    return send_from_directory('static', 'sw.js', mimetype='application/javascript')
+
+@app.route('/manifest.json')
+def manifest():
+    """Serve Web App Manifest from root"""
+    return send_from_directory('static', 'manifest.json', mimetype='application/manifest+json')
+
 @app.route('/')
+def landing():
+    """Animated landing page"""
+    return send_from_directory('templates', 'landing.html')
+
+@app.route('/auth')
+def auth():
+    """Sign in / Sign up page"""
+    return send_from_directory('templates', 'auth.html')
+
+@app.route('/app')
 def index():
+    """Main diagnosis application (requires client-side auth)"""
     return send_from_directory('templates', 'index.html')
+
+@app.route('/scanning')
+def scanning():
+    """Scanning animation + results page"""
+    return send_from_directory('templates', 'scanning.html')
+
+
+# ──────────────────────────────────────────────────────────────
+# History API (local shelve fallback)
+# ──────────────────────────────────────────────────────────────
 
 @app.route('/api/history', methods=['GET'])
 def get_history():
@@ -63,31 +110,34 @@ def predict():
     if 'image' not in request.files:
         return jsonify({"success": False, "error": "No image provided"}), 400
 
-    file            = request.files['image']
-    language        = request.form.get('language', 'en')
-    patient_age     = request.form.get('age', '')
+    file             = request.files['image']
+    language         = request.form.get('language', 'en')
+    patient_age      = request.form.get('age', '')
     patient_symptoms = request.form.get('symptoms', '')
-    patient_spo2    = request.form.get('spo2', '')
-    haemoptysis     = request.form.get('haemoptysis', 'no') == 'yes'
-    fever_days      = request.form.get('fever_days', '')
+    patient_spo2     = request.form.get('spo2', '')
+    haemoptysis      = request.form.get('haemoptysis', 'no') == 'yes'
+    fever_days       = request.form.get('fever_days', '')
 
     image_bytes = file.read()
 
     # 1. Quality Assessment & Enhancement Pipeline
-    # Toggles ESRGAN mock or Sharpening depending on frontend (defaulting to False/Lightweight)
     use_esrgan = request.form.get('use_esrgan', 'false').lower() == 'true'
     is_valid, processed_image_bytes, qa_report = ImageEnhancementPipeline.process_image(image_bytes, use_esrgan=use_esrgan)
-    
+
     if not is_valid:
-        return jsonify({"success": False, "error": f"Image Rejected: {qa_report.get('Status')} (Score: {qa_report.get('NewBlurScore', qa_report.get('BlurScore'))})", "qa_report": qa_report}), 400
+        return jsonify({
+            "success": False,
+            "error": f"Image Rejected: {qa_report.get('Status')} (Score: {qa_report.get('NewBlurScore', qa_report.get('BlurScore'))})",
+            "qa_report": qa_report
+        }), 400
 
     # 2. Prediction (with uncertainty)
     try:
         patient_name = request.form.get('patient_name', 'Unknown')
         image_pil = Image.open(io.BytesIO(processed_image_bytes)).convert('RGB')
         results   = system.predict(
-            image_pil, 
-            patient_name=patient_name, 
+            image_pil,
+            patient_name=patient_name,
             patient_age=patient_age,
             patient_spo2=patient_spo2,
             haemoptysis=haemoptysis,
@@ -96,7 +146,7 @@ def predict():
     except Exception as e:
         return jsonify({"success": False, "error": f"Model error: {str(e)}"}), 500
 
-    # 3. Multilingual Report (Feature 8)
+    # 3. Multilingual Report
     report = MultilingualReportGen.generate_report(
         language=language,
         diagnosis=results['diagnosis'],
@@ -110,7 +160,7 @@ def predict():
         referral_hours=results.get('referral_hours'),
     )
 
-    # 4. Structured Output (Feature 7)
+    # 4. Structured Output
     structured = build_structured_output(
         patient_info={"age": patient_age, "spo2": patient_spo2, "symptoms": patient_symptoms},
         prediction=results,
@@ -121,25 +171,27 @@ def predict():
     heatmap_data_url = f"data:image/jpeg;base64,{heatmap_b64}"
 
     session_id = str(uuid.uuid4())[:8]
+
+    # 6. Save to local shelve (offline fallback)
     try:
         with shelve.open(HISTORY_DB) as db:
             db[session_id] = {
-                "session_id": session_id,
-                "timestamp": datetime.datetime.utcnow().isoformat() + "Z",
-                "patient_name": request.form.get('patient_name', 'Unknown'),
-                "patient_age": patient_age,
-                "diagnosis": results['diagnosis'],
-                "confidence": f"{results['confidence']:.1f}",
-                "risk_level": results['risk_level'],
-                "tb_prob": f"{results['tb_prob']:.4f}",
-                "pneumonia_prob": f"{results['pneumonia_prob']:.4f}",
-                "language": language,
+                "session_id":    session_id,
+                "timestamp":     datetime.datetime.utcnow().isoformat() + "Z",
+                "patient_name":  request.form.get('patient_name', 'Unknown'),
+                "patient_age":   patient_age,
+                "diagnosis":     results['diagnosis'],
+                "confidence":    f"{results['confidence']:.1f}",
+                "risk_level":    results['risk_level'],
+                "tb_prob":       f"{results['tb_prob']:.4f}",
+                "pneumonia_prob":f"{results['pneumonia_prob']:.4f}",
+                "language":      language,
             }
     except Exception:
-        pass  # Never let history saving break the main response
+        pass
 
     return jsonify({
-        "success": True,
+        "success":    True,
         "session_id": session_id,
         "results": {
             "diagnosis":             results['diagnosis'],
@@ -183,5 +235,4 @@ def _risk_color(risk_level: str) -> str:
 if __name__ == '__main__':
     os.makedirs('static', exist_ok=True)
     os.makedirs('templates', exist_ok=True)
-    # Disabled reloader to prevent duplicate PyTorch model loading in memory
     app.run(host='0.0.0.0', port=5000, debug=True, use_reloader=False)

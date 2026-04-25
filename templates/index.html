@@ -5,344 +5,316 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>RuralX AI | Multimodal Chest X-Ray Diagnostics</title>
     <meta name="description" content="Offline-capable Multimodal AI for early detection and triage of TB, Pneumonia, and chest diseases in rural healthcare.">
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="manifest" href="/manifest.json">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
     <link rel="stylesheet" href="/static/style.css">
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/sw.js').then(reg => {
+                    console.log('SW registered:', reg.scope);
+                }).catch(err => console.log('SW registration failed:', err));
+            });
+        }
+    </script>
 </head>
 <body>
+    
+    <!-- Animated Background -->
+    <div class="bg-grid"></div>
+    <div class="bg-orb bg-orb-1"></div>
+    <div class="bg-orb bg-orb-2"></div>
+    <div class="bg-orb bg-orb-3"></div>
+
     <div class="app-container">
 
         <!-- ─── Header ─── -->
         <header class="top-nav">
             <div class="logo">
                 <div class="logo-icon">
-                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
                         <path d="M21 12C21 16.9706 16.9706 21 12 21C7.02944 21 3 16.9706 3 12C3 7.02944 7.02944 3 12 3C16.9706 3 21 7.02944 21 12Z" stroke="#fff" stroke-width="2"/>
                         <path d="M12 8V16M8 12H16" stroke="#fff" stroke-width="2" stroke-linecap="round"/>
                     </svg>
                 </div>
                 <div>
                     <span class="logo-name">RuralX <span class="logo-ai">AI</span></span>
-                    <span class="logo-tagline">Enhanced Diagnostic System v2</span>
+                    <span class="logo-tagline">Medical Grade Diagnostics</span>
                 </div>
             </div>
 
+            <nav class="nav-tabs">
+                <button class="nav-tab active" data-target="diagnosisView">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+                    New Scan
+                </button>
+                <button class="nav-tab" data-target="historyView">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                    Patient History
+                </button>
+                <button class="nav-tab" data-target="epiDashboardView">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+                    Epi-Dashboard
+                </button>
+                <button class="nav-tab" data-target="aboutView">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+                    System Info
+                </button>
+            </nav>
+
             <div class="nav-controls">
-                <span class="status-dot online"></span>
-                <span class="status-label">System Ready · Offline Mode</span>
+                <!-- User Profile Bar (populated by JS) -->
+                <div id="userProfileBar" class="user-profile-bar" style="display:none;">
+                    <div class="user-avatar" id="userAvatar">?</div>
+                    <div class="user-info">
+                        <span class="user-name" id="userName">Loading…</span>
+                        <span class="user-pid" id="userPid">RX-…</span>
+                    </div>
+                    <div class="user-sep"></div>
+                    <button class="btn-icon-only" onclick="window.RuralXAuth.signOut()" title="Sign Out">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+                    </button>
+                </div>
             </div>
         </header>
 
-        <nav class="nav-tabs" style="display: flex; gap: 1rem; margin-top: 1rem; padding: 0 2rem; border-bottom: 1px solid rgba(255,255,255,0.1);">
-            <button class="nav-tab active" data-target="diagnosisView" style="background: none; border: none; color: #fff; padding: 0.5rem 1rem; font-size: 1rem; cursor: pointer; border-bottom: 2px solid transparent; opacity: 0.7;">Diagnosis</button>
-            <button class="nav-tab" data-target="historyView" style="background: none; border: none; color: #fff; padding: 0.5rem 1rem; font-size: 1rem; cursor: pointer; border-bottom: 2px solid transparent; opacity: 0.7;">Scan History</button>
-            <button class="nav-tab" data-target="aboutView" style="background: none; border: none; color: #fff; padding: 0.5rem 1rem; font-size: 1rem; cursor: pointer; border-bottom: 2px solid transparent; opacity: 0.7;">About System</button>
-        </nav>
-
         <!-- ─── DIAGNOSIS TAB ─── -->
-        <main id="diagnosisView" class="main-grid tab-view active">
+        <main id="diagnosisView" class="tab-view active fade-in-up">
+            
+            <div class="diag-header">
+                <h1>Diagnostic Intake</h1>
+                <p>Upload a chest radiograph and provide clinical context for AI analysis.</p>
+            </div>
 
-            <!-- Left: Input Panel -->
-            <section class="glass-panel upload-panel">
-                <div class="section-header">
-                    <div class="section-badge">Feature 1–8</div>
-                    <h2>Diagnostic Input</h2>
-                    <p>Upload a chest X-ray and provide clinical context</p>
-                </div>
-
-                <form id="diagnosisForm" autocomplete="off">
-
-                    <!-- Drop Zone -->
-                    <div class="drop-zone" id="dropZone">
-                        <input type="file" id="xrayImage" name="image" accept="image/*" required>
-                        <div class="drop-placeholder" id="dropPlaceholder">
-                            <div class="drop-icon">
-                                <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                                    <path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" stroke-linejoin="round" stroke-linecap="round"/>
-                                </svg>
+            <form id="diagnosisForm" class="diag-form" autocomplete="off">
+                <!-- Left Column: Upload -->
+                <div class="diag-col upload-col">
+                    <div class="glass-panel upload-panel">
+                        <div class="panel-badge">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                            Step 1: Imaging
+                        </div>
+                        
+                        <!-- Drop Zone -->
+                        <div class="drop-zone" id="dropZone">
+                            <input type="file" id="xrayImage" name="image" accept="image/*" required>
+                            
+                            <div class="drop-placeholder" id="dropPlaceholder">
+                                <div class="drop-icon">
+                                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+                                </div>
+                                <span class="drop-title">Upload Radiograph</span>
+                                <span class="drop-sub">Drag & drop or click to browse</span>
+                                <span class="drop-format">JPG, PNG, DICOM (converted)</span>
                             </div>
-                            <span class="drop-title">Drop X-Ray Image Here</span>
-                            <span class="drop-sub">or click to browse · JPG / PNG supported</span>
-                        </div>
-                        <img id="imagePreview" class="hidden" alt="X-Ray Preview">
-                        <div class="drop-overlay hidden" id="dropOverlay">
-                            <span>Change Image</span>
-                        </div>
-                    </div>
 
-                    <!-- Patient Data -->
-                    <div class="field-grid">
-                        <div class="field-group">
-                            <label for="patientName">Patient Name</label>
-                            <input type="text" id="patientName" name="patient_name" placeholder="e.g. John Doe">
+                            <img id="imagePreview" class="hidden" alt="X-Ray Preview">
+                            <div class="drop-overlay hidden" id="dropOverlay">
+                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                                <span>Change Image</span>
+                            </div>
                         </div>
-                        <div class="field-group">
-                            <label for="age">Patient Age</label>
-                            <input type="number" id="age" name="age" placeholder="e.g. 45" min="0" max="120">
-                        </div>
-                    </div>
 
-                    <!-- NEW: Clinical Vitals & History -->
-                    <div class="field-grid">
-                        <div class="field-group">
-                            <label for="spo2">SpO2 Level (%) <span class="required" style="color:red">*</span></label>
-                            <input type="number" id="spo2" name="spo2" placeholder="e.g. 96" min="30" max="100" required>
-                        </div>
-                        <div class="field-group">
-                            <label for="temperature">Body Temp (°F)</label>
-                            <input type="number" id="temperature" name="temperature" placeholder="e.g. 98.6" step="0.1">
-                        </div>
-                    </div>
-
-                    <div class="field-grid">
-                        <div class="field-group">
-                            <label for="fever_days">Fever Duration (Days)</label>
-                            <input type="number" id="fever_days" name="fever_days" placeholder="0" min="0">
-                        </div>
-                        <div class="field-group">
-                            <label for="cough_days">Cough Duration (Days)</label>
-                            <input type="number" id="cough_days" name="cough_days" placeholder="0" min="0">
-                        </div>
-                    </div>
-
-                    <div class="radio-group-container" style="display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 1rem;">
-                        <label class="radio-label" style="font-size: 0.875rem; color: #64748B; font-weight: 500;">Haemoptysis (Coughing Blood)</label>
-                        <div class="radio-options" style="display: flex; gap: 1rem;">
-                            <label style="display: flex; align-items: center; gap: 0.25rem;"><input type="radio" name="haemoptysis" value="yes"> Yes</label>
-                            <label style="display: flex; align-items: center; gap: 0.25rem;"><input type="radio" name="haemoptysis" value="no" checked> No</label>
-                        </div>
-                    </div>
-
-                    <div class="radio-group-container" style="display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 1.5rem;">
-                        <label class="radio-label" style="font-size: 0.875rem; color: #64748B; font-weight: 500;">BCG Vaccination Status</label>
-                        <div class="radio-options" style="display: flex; gap: 1rem;">
-                            <label style="display: flex; align-items: center; gap: 0.25rem;"><input type="radio" name="bcg" value="yes"> Yes</label>
-                            <label style="display: flex; align-items: center; gap: 0.25rem;"><input type="radio" name="bcg" value="no"> No</label>
-                            <label style="display: flex; align-items: center; gap: 0.25rem;"><input type="radio" name="bcg" value="unknown" checked> Unknown</label>
-                        </div>
-                    </div>
-
-                    <div class="field-group full">
-                        <label for="symptoms">Observed Symptoms</label>
-                        <input type="text" id="symptoms" name="symptoms" placeholder="Additional symptoms...">
-                    </div>
-
-                    <!-- NEW: Multi-language Grid -->
-                    <div class="field-group full">
-                        <label>Diagnostic Report Language</label>
-                        <div class="language-grid" id="languageGrid" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.5rem;">
-                            <label class="lang-card" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem; border: 1px solid #E2E8F0; border-radius: 6px; cursor: pointer;"><input type="radio" name="language" value="en" checked><span>🇬🇧 English</span></label>
-                            <label class="lang-card" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem; border: 1px solid #E2E8F0; border-radius: 6px; cursor: pointer;"><input type="radio" name="language" value="hi"><span>🇮🇳 Hindi</span></label>
-                            <label class="lang-card" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem; border: 1px solid #E2E8F0; border-radius: 6px; cursor: pointer;"><input type="radio" name="language" value="kn"><span>🇮🇳 Kannada</span></label>
-                            <label class="lang-card" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem; border: 1px solid #E2E8F0; border-radius: 6px; cursor: pointer;"><input type="radio" name="language" value="mr"><span>🇮🇳 Marathi</span></label>
-                            <label class="lang-card" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem; border: 1px solid #E2E8F0; border-radius: 6px; cursor: pointer;"><input type="radio" name="language" value="ta"><span>🇮🇳 Tamil</span></label>
-                            <label class="lang-card" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem; border: 1px solid #E2E8F0; border-radius: 6px; cursor: pointer;"><input type="radio" name="language" value="te"><span>🇮🇳 Telugu</span></label>
-                            <label class="lang-card" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem; border: 1px solid #E2E8F0; border-radius: 6px; cursor: pointer;"><input type="radio" name="language" value="bn"><span>🇮🇳 Bengali</span></label>
-                            <label class="lang-card" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem; border: 1px solid #E2E8F0; border-radius: 6px; cursor: pointer;"><input type="radio" name="language" value="or"><span>🇮🇳 Odia</span></label>
-                        </div>
-                    </div>
-
-                    <!-- NEW: Pre-Analysis Risk Strip -->
-                    <div id="preRiskStrip" class="pre-risk-strip hidden" style="background-color: #FEF2F2; border-left: 4px solid #EF4444; padding: 1rem; border-radius: 0.5rem; margin-top: 1rem; display: none;">
-                        <div style="display: flex; gap: 0.75rem; align-items: center;">
-                            <div class="strip-icon" style="font-size: 1.25rem;">⚠️</div>
-                            <div class="strip-text" style="color: #991B1B; font-size: 0.875rem;">
-                                <strong>High Risk Indicators Detected:</strong>
+                        <!-- Pre-Analysis Risk Strip -->
+                        <div id="preRiskStrip" class="pre-risk-strip" style="display: none;">
+                            <div class="risk-icon">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                            </div>
+                            <div class="risk-content">
+                                <strong>Clinical Red Flags Detected</strong>
                                 <span id="preRiskText"></span>
                             </div>
                         </div>
+
+                        <button type="submit" class="btn-primary huge" id="analyzeBtn">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+                            <span id="btnText">Initiate AI Analysis</span>
+                            <div class="loader hidden" id="btnLoader"></div>
+                        </button>
                     </div>
-
-                    <button type="submit" class="primary-btn" id="analyzeBtn">
-                        <svg class="btn-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35M11 8v6M8 11h6"/></svg>
-                        <span id="btnText">Analyze Scan</span>
-                        <div class="loader hidden" id="btnLoader"></div>
-                    </button>
-
-                    <!-- NEW: Processing Steps -->
-                    <div id="processingSteps" class="processing-steps hidden" style="margin-top: 1rem; background: #F8FAFC; padding: 1rem; border-radius: 0.5rem; border: 1px solid #E2E8F0; display: none;">
-                        <h4 style="font-size: 0.875rem; margin-bottom: 0.5rem; color: #334155;">Processing Inference...</h4>
-                        <div class="step-item" id="step1" style="font-size: 0.8rem; color: #64748B; display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.25rem;">
-                            <span class="step-icon">⏳</span> Loading Tri-Ensemble weights
-                        </div>
-                        <div class="step-item" id="step2" style="font-size: 0.8rem; color: #64748B; display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.25rem;">
-                            <span class="step-icon">⏳</span> Checking image quality (Laplacian)
-                        </div>
-                        <div class="step-item" id="step3" style="font-size: 0.8rem; color: #64748B; display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.25rem;">
-                            <span class="step-icon">⏳</span> Computing MC Dropout (10 passes)
-                        </div>
-                        <div class="step-item" id="step4" style="font-size: 0.8rem; color: #64748B; display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.25rem;">
-                            <span class="step-icon">⏳</span> Generating Grad-CAM heatmap
-                        </div>
-                    </div>
-
-                </form>
-            </section>
-
-            <!-- Right: Results Panel -->
-            <section class="glass-panel results-panel">
-                <div class="section-header">
-                    <div class="section-badge">AI Output</div>
-                    <h2>Diagnostic Results</h2>
-                    <p>AI analysis, heatmap, and clinical report</p>
                 </div>
 
-                <!-- Empty state -->
-                <div id="resultsPlaceholder" class="empty-state">
-                    <div class="empty-icon">
-                        <svg width="52" height="52" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1">
-                            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" stroke-linejoin="round"/>
-                        </svg>
+                <!-- Right Column: Patient Data -->
+                <div class="diag-col form-col">
+                    <div class="glass-panel form-panel">
+                        <div class="panel-badge">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+                            Step 2: Clinical Context
+                        </div>
+
+                        <div class="form-section">
+                            <h3 class="fs-title">Patient Demographics</h3>
+                            <div class="fg-row">
+                                <div class="fg">
+                                    <label for="patientName">Full Name</label>
+                                    <input type="text" id="patientName" name="patient_name" placeholder="John Doe">
+                                </div>
+                                <div class="fg">
+                                    <label for="patientDob">Date of Birth</label>
+                                    <input type="date" id="patientDob" name="patient_dob">
+                                </div>
+                            </div>
+                            <div class="fg-row">
+                                <div class="fg">
+                                    <label for="age">Age <span class="fg-hint">(Auto-calculated)</span></label>
+                                    <input type="number" id="age" name="age" placeholder="-" readonly class="readonly">
+                                </div>
+                                <div class="fg">
+                                    <label for="patientGender">Gender</label>
+                                    <select id="patientGender" name="gender">
+                                        <option value="">Select...</option>
+                                        <option value="male">Male</option>
+                                        <option value="female">Female</option>
+                                        <option value="other">Other</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="form-section">
+                            <h3 class="fs-title">Vital Signs & History</h3>
+                            <div class="fg-row">
+                                <div class="fg required">
+                                    <label for="spo2">SpO₂ Level (%)</label>
+                                    <input type="number" id="spo2" name="spo2" placeholder="98" min="30" max="100" required>
+                                </div>
+                                <div class="fg">
+                                    <label for="temperature">Temperature (°F)</label>
+                                    <input type="number" id="temperature" name="temperature" placeholder="98.6" step="0.1">
+                                </div>
+                            </div>
+                            <div class="fg-row">
+                                <div class="fg">
+                                    <label for="fever_days">Fever Duration (Days)</label>
+                                    <input type="number" id="fever_days" name="fever_days" placeholder="0" min="0">
+                                </div>
+                                <div class="fg">
+                                    <label for="cough_days">Cough Duration (Days)</label>
+                                    <input type="number" id="cough_days" name="cough_days" placeholder="0" min="0">
+                                </div>
+                            </div>
+                            
+                            <div class="fg-row radio-row">
+                                <div class="fg">
+                                    <label>Haemoptysis <span class="fg-hint">(Coughing Blood)</span></label>
+                                    <div class="radio-group">
+                                        <label class="radio-pill"><input type="radio" name="haemoptysis" value="yes"><span>Yes</span></label>
+                                        <label class="radio-pill"><input type="radio" name="haemoptysis" value="no" checked><span>No</span></label>
+                                    </div>
+                                </div>
+                                <div class="fg">
+                                    <label>BCG Vaccination</label>
+                                    <div class="radio-group">
+                                        <label class="radio-pill"><input type="radio" name="bcg" value="yes"><span>Yes</span></label>
+                                        <label class="radio-pill"><input type="radio" name="bcg" value="no"><span>No</span></label>
+                                        <label class="radio-pill"><input type="radio" name="bcg" value="unknown" checked><span>Unk</span></label>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="fg">
+                                <label for="symptoms">Additional Symptoms</label>
+                                <input type="text" id="symptoms" name="symptoms" placeholder="Chest pain, fatigue, night sweats...">
+                            </div>
+                        </div>
+
+                        <div class="form-section no-border">
+                            <h3 class="fs-title">Report Localization</h3>
+                            <div class="lang-grid">
+                                <label class="lang-card"><input type="radio" name="language" value="en" checked><span>🇬🇧 English</span></label>
+                                <label class="lang-card"><input type="radio" name="language" value="hi"><span>🇮🇳 Hindi</span></label>
+                                <label class="lang-card"><input type="radio" name="language" value="kn"><span>🇮🇳 Kannada</span></label>
+                                <label class="lang-card"><input type="radio" name="language" value="mr"><span>🇮🇳 Marathi</span></label>
+                                <label class="lang-card"><input type="radio" name="language" value="ta"><span>🇮🇳 Tamil</span></label>
+                                <label class="lang-card"><input type="radio" name="language" value="te"><span>🇮🇳 Telugu</span></label>
+                                <label class="lang-card"><input type="radio" name="language" value="bn"><span>🇮🇳 Bengali</span></label>
+                                <label class="lang-card"><input type="radio" name="language" value="or"><span>🇮🇳 Odia</span></label>
+                            </div>
+                        </div>
+
                     </div>
-                    <p>Awaiting X-ray upload…</p>
-                    <span>Results will appear here after analysis</span>
                 </div>
-
-                <!-- Results Content -->
-                <div id="resultsContent" class="hidden fade-in">
-
-                    <!-- Triage Banner -->
-                    <div class="triage-banner" id="triageBanner">
-                        <div class="triage-icon" id="triageIcon">!</div>
-                        <div class="triage-body">
-                            <div class="triage-level" id="triageLevel">—</div>
-                            <div class="triage-referral" id="triageReferral"></div>
-                        </div>
-                        <div class="triage-qa" id="qaMessage"></div>
-                    </div>
-
-                    <!-- Confidence + Uncertainty -->
-                    <div class="metrics-row" id="confidenceRow">
-                        <div class="metric-pill">
-                            <span class="mp-label">Confidence</span>
-                            <span class="mp-value" id="confidenceVal">—</span>
-                        </div>
-                        <div class="metric-pill uncertainty">
-                            <span class="mp-label">Uncertainty (MC Dropout)</span>
-                            <span class="mp-value" id="uncertaintyVal">—</span>
-                        </div>
-                    </div>
-
-                    <!-- Grad-CAM + Probability Bars -->
-                    <div class="visuals-grid">
-                        <div class="visual-card">
-                            <div class="card-header">
-                                <h4>Grad-CAM Explainability</h4>
-                                <span class="card-badge">XAI</span>
-                            </div>
-                            <!-- NEW: Heatmap Tabs -->
-                            <div class="heatmap-tabs" style="display: flex; gap: 0.5rem; margin-bottom: 0.5rem;">
-                                <button type="button" class="hm-tab active" data-view="heatmap" style="flex: 1; padding: 0.25rem; font-size: 0.75rem; border: 1px solid #E2E8F0; border-radius: 4px; background: #EEF2FF; color: #4F46E5; cursor: pointer;">Heatmap</button>
-                                <button type="button" class="hm-tab" data-view="original" style="flex: 1; padding: 0.25rem; font-size: 0.75rem; border: 1px solid #E2E8F0; border-radius: 4px; background: white; color: #64748B; cursor: pointer;">Original</button>
-                            </div>
-                            <div class="img-wrapper" style="position: relative;">
-                                <img id="originalImage" alt="Original X-Ray" style="position: absolute; top:0; left:0; width:100%; height:100%; object-fit:contain; opacity: 0; z-index: 1;">
-                                <img id="heatmapImage" alt="Grad-CAM Heatmap" style="position: relative; z-index: 2;">
-                            </div>
-                            <!-- NEW: Opacity Slider -->
-                            <div class="opacity-control" style="margin-top: 0.5rem;">
-                                <label style="font-size: 0.75rem; color: #64748b;">Heatmap Opacity</label>
-                                <input type="range" id="heatmapOpacity" min="0" max="1" step="0.05" value="1" style="width: 100%;">
-                            </div>
-                        </div>
-
-                        <div class="stats-card">
-                            <div class="card-header">
-                                <h4>Disease Probability</h4>
-                                <span class="card-badge">Feature 1–2</span>
-                            </div>
-
-                            <div class="stat-bar">
-                                <div class="stat-info">
-                                    <span>Tuberculosis</span>
-                                    <span id="probTB" class="prob-value">0%</span>
-                                </div>
-                                <div class="progress-track">
-                                    <div class="progress-fill danger" id="fillTB"></div>
-                                </div>
-                            </div>
-
-                            <div class="stat-bar">
-                                <div class="stat-info">
-                                    <span>Pneumonia</span>
-                                    <span id="probPneumonia" class="prob-value">0%</span>
-                                </div>
-                                <div class="progress-track">
-                                    <div class="progress-fill warning" id="fillPneumonia"></div>
-                                </div>
-                            </div>
-
-                            <!-- Radiological Findings -->
-                            <div class="card-header" style="margin-top:1.25rem; margin-bottom:0.75rem;">
-                                <h4>Radiological Findings</h4>
-                                <span class="card-badge">Feature 2</span>
-                            </div>
-                            <div id="findingsList" class="findings-list">
-                                <!-- Injected by JS -->
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Multilingual Report -->
-                    <div class="report-box">
-                        <div class="report-header">
-                            <h3 id="reportTitle">Diagnostic Report</h3>
-                            <span class="card-badge">Feature 8</span>
-                        </div>
-                        <div class="report-list" id="reportList"></div>
-                        <div class="report-actions">
-                            <button class="secondary-btn" onclick="window.print()">
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <path d="M6 9V2h12v7M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2M6 14h12v8H6v-8z" stroke-linejoin="round"/>
-                                </svg>
-                                Print
-                            </button>
-                        </div>
-                    </div>
-
-                    <!-- JSON Viewer Container -->
-                    <div id="jsonViewerContainer" class="json-viewer hidden" style="margin-top: 1rem; background: #1E293B; border-radius: 0.5rem; padding: 1rem; color: #E2E8F0; font-family: monospace; font-size: 0.8rem; overflow-x: auto; display: none;">
-                        <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem; border-bottom: 1px solid #334155; padding-bottom: 0.5rem;">
-                            <strong style="color: #38BDF8;">Structured Output (JSON)</strong>
-                            <button type="button" onclick="navigator.clipboard.writeText(document.getElementById('jsonContent').innerText)" style="background: none; border: none; color: #94A3B8; cursor: pointer; font-size: 0.75rem;">Copy</button>
-                        </div>
-                        <pre id="jsonContent" style="margin: 0; white-space: pre-wrap; word-break: break-all;"></pre>
-                    </div>
-
-                </div><!-- end resultsContent -->
-            </section>
+            </form>
         </main>
 
         <!-- ─── HISTORY TAB ─── -->
-        <main id="historyView" class="main-grid tab-view" style="display: none;">
-            <section class="glass-panel" style="grid-column: span 12;">
-                <div class="section-header">
-                    <h2>Scan History</h2>
-                    <p>Recent offline inference logs</p>
+        <main id="historyView" class="tab-view" style="display: none;">
+            <div class="history-header">
+                <h2>Longitudinal Patient Records</h2>
+                <p>Cloud-synced diagnostic scans with automated health delta tracking.</p>
+            </div>
+            <div class="history-list" id="historyList">
+                <div class="metrics-loading">
+                    <div class="loader" style="width:32px;height:32px;border-width:3px;margin:0 auto 1rem;"></div>
+                    Retrieving patient records...
                 </div>
-                <div class="history-list" id="historyList" style="display: flex; flex-direction: column; gap: 1rem;">
-                    <!-- Injected by JS -->
+            </div>
+        </main>
+
+        <!-- ─── EPI DASHBOARD TAB ─── -->
+        <main id="epiDashboardView" class="tab-view" style="display: none;">
+            <div class="history-header" style="display:flex; justify-content:space-between; align-items:center;">
+                <div>
+                    <h2>Live Epidemiological Map</h2>
+                    <p>National real-time tracking of diagnostic hotspots.</p>
                 </div>
-            </section>
+                <div style="display:flex; gap:1rem;">
+                    <div style="background:rgba(239, 68, 68, 0.1); border:1px solid rgba(239,68,68,0.2); padding:0.5rem 1rem; border-radius:8px; color:#FCA5A5; font-size:0.85rem;">
+                        <strong id="tbCount">0</strong> Active TB Clusters
+                    </div>
+                    <div style="background:rgba(245, 158, 11, 0.1); border:1px solid rgba(245,158,11,0.2); padding:0.5rem 1rem; border-radius:8px; color:#FCD34D; font-size:0.85rem;">
+                        <strong id="pneuCount">0</strong> Pneumonia Zones
+                    </div>
+                </div>
+            </div>
+            <div class="glass-panel" style="padding:4px; height:600px; margin-top:1rem;">
+                <div id="indiaMap" style="width:100%; height:100%; border-radius:12px; z-index:1;"></div>
+            </div>
         </main>
 
         <!-- ─── ABOUT TAB ─── -->
-        <main id="aboutView" class="main-grid tab-view" style="display: none;">
-            <section class="glass-panel" style="grid-column: span 12;">
-                <div class="section-header">
-                    <h2>About RuralX AI</h2>
-                    <p>System Specifications & Medical Capabilities</p>
+        <main id="aboutView" class="tab-view" style="display: none;">
+            <div class="glass-panel about-panel">
+                <div class="about-hero">
+                    <div class="logo-icon huge">
+                        <svg width="48" height="48" viewBox="0 0 24 24" fill="none"><path d="M21 12C21 16.9706 16.9706 21 12 21C7.02944 21 3 16.9706 3 12C3 7.02944 7.02944 3 12 3C16.9706 3 21 7.02944 21 12Z" stroke="#fff" stroke-width="2"/><path d="M12 8V16M8 12H16" stroke="#fff" stroke-width="2" stroke-linecap="round"/></svg>
+                    </div>
+                    <h2>RuralX AI Diagnostic System</h2>
+                    <p>Advanced Multimodal Inference Pipeline v2</p>
                 </div>
-                <div style="color: #334155; line-height: 1.6;">
-                    <h3>Architecture</h3>
-                    <p>RuralX AI utilizes a <strong>Triple DenseNet-121 Ensemble</strong> optimized for local CPU execution. It employs MC Dropout for uncertainty estimation and Laplacian variance for image quality gating.</p>
-                    <h3 style="margin-top: 1rem;">Clinical Target</h3>
-                    <p>Detects Tuberculosis and Pneumonia. Incorporates SpO2 levels and clinical history to adjust triage risk accurately without compromising core model weights.</p>
+
+                <div class="about-grid">
+                    <div class="about-card">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+                        <h3>Triple-Ensemble Architecture</h3>
+                        <p>Powered by three optimized DenseNet-121 backbones running concurrently. Predictions are aggregated using softmax averaging for superior accuracy and robustness against noise.</p>
+                    </div>
+                    <div class="about-card">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                        <h3>Uncertainty Calibration</h3>
+                        <p>Implements Monte Carlo (MC) Dropout across 10 stochastic forward passes. This quantifies epistemic uncertainty, ensuring the model flags unreliable predictions rather than guessing blindly.</p>
+                    </div>
+                    <div class="about-card">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+                        <h3>XAI Heatmaps</h3>
+                        <p>Utilizes Gradient-weighted Class Activation Mapping (Grad-CAM) to generate high-resolution overlay heatmaps, providing visual explainability of radiological findings to clinicians.</p>
+                    </div>
+                    <div class="about-card">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--orange)" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                        <h3>Longitudinal Cloud Sync</h3>
+                        <p>Fully integrated with Supabase. Automatically tracks patient scan history over time and computes precise mathematical health deltas between current and previous probability distributions.</p>
+                    </div>
                 </div>
-            </section>
+            </div>
         </main>
 
     </div><!-- end app-container -->
 
+    <!-- Supabase SDK (must load before supabase-client.js) -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    <script src="/static/supabase-client.js"></script>
     <script src="/static/main.js"></script>
 </body>
 </html>
