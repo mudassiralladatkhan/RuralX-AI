@@ -21,4 +21,4 @@ jobs:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         # NOTE: You MUST change "your-hf-username" and "RuralX-AI" below to your actual Hugging Face username and Space name!
         run: |
-          git push --force https://your-hf-username:$HF_TOKEN@huggingface.co/spaces/your-hf-username/RuralX-AI main
+          git push --force https://your-hf-username:$HF_TOKEN@huggingface.co/spaces/Zainqjajan/RuralX-AI main
