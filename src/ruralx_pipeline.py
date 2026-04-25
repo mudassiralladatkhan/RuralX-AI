@@ -676,13 +676,17 @@ class RuralXModelSystem:
         model_files = ['model_1.pth', 'model_2.pth', 'model_3.pth']
         
         import gc
+        import warnings
         for file in model_files:
             model = densenet121(pretrained=False)
             model.classifier = nn.Linear(1024, len(self.disease_classes))
             try:
                 import os
                 if os.path.exists(file):
-                    state_dict = torch.load(file, map_location='cpu')
+                    # FEATURE: Low-RAM Optimization (mmap streaming to avoid RAM spikes)
+                    with warnings.catch_warnings():
+                        warnings.simplefilter("ignore")
+                        state_dict = torch.load(file, map_location='cpu', mmap=True)
                     model.load_state_dict(state_dict)
                     print(f"[RuralX] Successfully loaded trained weights from {file}!")
                     del state_dict  # Free up RAM immediately!
@@ -691,6 +695,9 @@ class RuralXModelSystem:
                     print(f"[RuralX] Warning: {file} not found.")
             except Exception as e:
                 print(f"[RuralX] Failed to load {file}: {e}")
+            
+            # FEATURE: Low-RAM Optimization (Cast to 16-bit to cut memory in half)
+            model = model.to(torch.bfloat16)
             model.eval()
             self.models.append(model)
             self.grad_cams.append(ExplainableGradCAM(model, model.features[-1]))
@@ -721,6 +728,9 @@ class RuralXModelSystem:
         6. Grad-CAM heatmap
         """
         input_tensor = self.transform(image_pil).unsqueeze(0)
+        
+        # FEATURE: Low-RAM Optimization (Cast input to match model precision)
+        input_tensor = input_tensor.to(torch.bfloat16)
 
         all_models_mean_probs = []
         all_models_std_probs = []
